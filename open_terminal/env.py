@@ -65,3 +65,8 @@ MAX_TERMINAL_SESSIONS = int(
         config.get("max_terminal_sessions", "16"),
     )
 )
+
+ENABLE_TERMINAL = os.environ.get(
+    "OPEN_TERMINAL_ENABLE_TERMINAL",
+    str(config.get("enable_terminal", True)),
+).lower() not in ("false", "0", "no")
