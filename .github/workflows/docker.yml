@@ -77,6 +77,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version from pyproject.toml
         id: version
@@ -85,14 +87,15 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
           echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
-
-      - name: Check if version changed
-        id: check
-        run: |
-          if git diff HEAD~1 --name-only | grep -q '^pyproject.toml$'; then
-            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "v$VERSION")
+            if [ "$TAG_SHA" = "${{ github.sha }}" ]; then
+              echo "is_new_version=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_new_version=false" >> "$GITHUB_OUTPUT"
+            fi
           else
-            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+            echo "is_new_version=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@v4
@@ -115,8 +118,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.check.outputs.version_changed }}
-            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.check.outputs.version_changed }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_new_version }}
+            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.is_new_version }}
             type=sha
 
       - name: Create manifest list and push
