@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] - 2026-03-05
+
+### Added
+
+- 📦 **Startup package installation** — new `OPEN_TERMINAL_PACKAGES` and `OPEN_TERMINAL_PIP_PACKAGES` environment variables install additional apt and pip packages automatically when the Docker container starts. No need to fork the Dockerfile for common customizations.
+
 ## [0.9.0] - 2026-03-04
 
 ### Added

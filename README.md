@@ -26,7 +26,24 @@ That's it — you're up and running at `http://localhost:8000`.
 
 #### Customizing the Docker Environment
 
-The default image ships with a broad set of tools, but you can tailor it to your needs. Fork the repo, edit the [Dockerfile](Dockerfile) to add or remove system packages, Python libraries, or language runtimes, then build your own image:
+The easiest way to add extra packages is with environment variables — no fork needed:
+
+```bash
+docker run -d --name open-terminal -p 8000:8000 \
+  -e OPEN_TERMINAL_PACKAGES="cowsay figlet" \
+  -e OPEN_TERMINAL_PIP_PACKAGES="httpx polars" \
+  ghcr.io/open-webui/open-terminal
+```
+
+| Variable | Description |
+|---|---|
+| `OPEN_TERMINAL_PACKAGES` | Space-separated list of **apt** packages to install at startup |
+| `OPEN_TERMINAL_PIP_PACKAGES` | Space-separated list of **pip** packages to install at startup |
+
+> [!NOTE]
+> Packages are installed each time the container starts, so startup will take longer with large package lists. For heavy customization, build a custom image instead.
+
+For full control, fork the repo, edit the [Dockerfile](Dockerfile), and build your own image:
 
 ```bash
 docker build -t my-terminal .

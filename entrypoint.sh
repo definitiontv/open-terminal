@@ -34,4 +34,17 @@ if [ "$OWNER" != "user" ]; then
     sudo chown -R user:user /home/user 2>/dev/null || true
 fi
 
+# Auto-install system packages
+if [ -n "${OPEN_TERMINAL_PACKAGES:-}" ]; then
+    echo "Installing system packages: $OPEN_TERMINAL_PACKAGES"
+    sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends $OPEN_TERMINAL_PACKAGES
+    sudo rm -rf /var/lib/apt/lists/*
+fi
+
+# Auto-install Python packages
+if [ -n "${OPEN_TERMINAL_PIP_PACKAGES:-}" ]; then
+    echo "Installing pip packages: $OPEN_TERMINAL_PIP_PACKAGES"
+    pip install --no-cache-dir $OPEN_TERMINAL_PIP_PACKAGES
+fi
+
 exec open-terminal "$@"
