@@ -34,6 +34,16 @@ if [ "$OWNER" != "user" ]; then
     sudo chown -R user:user /home/user 2>/dev/null || true
 fi
 
+# Seed essential dotfiles when /home/user is bind-mounted empty
+# (Docker does not populate bind-mounts with image contents)
+if [ ! -f "$HOME/.bashrc" ]; then
+    cp /etc/skel/.bashrc "$HOME/.bashrc" 2>/dev/null || true
+fi
+if [ ! -f "$HOME/.profile" ]; then
+    cp /etc/skel/.profile "$HOME/.profile" 2>/dev/null || true
+fi
+mkdir -p "$HOME/.local/bin"
+
 # Auto-install system packages
 if [ -n "${OPEN_TERMINAL_PACKAGES:-}" ]; then
     echo "Installing system packages: $OPEN_TERMINAL_PACKAGES"

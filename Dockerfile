@@ -49,6 +49,7 @@ RUN pip install --no-cache-dir .
 RUN useradd -m -s /bin/bash user && echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER user
 ENV SHELL=/bin/bash
+ENV PATH="/home/user/.local/bin:${PATH}"
 WORKDIR /home/user
 
 EXPOSE 8000
