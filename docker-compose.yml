@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  open-terminal:
+    image: definitiontv/open-terminal:latest
+    container_name: open-terminal
+    restart: unless-stopped
+    ports:
+      - "8017:8000"
+    env_file:
+      - .env
+    environment:
+      - OPEN_TERMINAL_API_KEY=${OPEN_TERMINAL_API_KEY}
