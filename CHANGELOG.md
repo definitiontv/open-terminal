@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.25] - 2026-03-20
+
+### Added
+
+- 📄 **Extended document text extraction** in `read_file` — `.rtf`, `.xls`, `.odt`, `.ods`, `.odp`, `.epub`, and `.eml` files are now automatically converted to text and returned in the standard JSON format. RTF strips formatting to plain text, legacy Excel (`.xls`) renders sheets as tab-separated values, OpenDocument formats (`.odt`/`.ods`/`.odp`) parse the underlying XML, EPUB extracts body text in reading order, and `.eml` extracts headers and body (with HTML tag stripping). All support `start_line`/`end_line` range selection.
+
 ## [0.11.24] - 2026-03-20
 
 ### Added

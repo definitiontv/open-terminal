@@ -489,6 +489,246 @@ async def read_file(
                 "content": "".join(lines[start:end]),
             }
 
+        # Extract text from Rich Text Format (.rtf)
+        if mime == "application/rtf" or target.lower().endswith(".rtf"):
+            from striprtf.striprtf import rtf_to_text
+
+            raw_text = raw.decode("utf-8", errors="replace")
+            text = await asyncio.to_thread(rtf_to_text, raw_text)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from legacy Excel spreadsheets (.xls)
+        if mime == "application/vnd.ms-excel" or target.lower().endswith(".xls"):
+            import xlrd
+
+            wb = await asyncio.to_thread(xlrd.open_workbook, target)
+            parts = []
+            for sheet in wb.sheets():
+                parts.append(f"--- {sheet.name} ---")
+                for row_idx in range(sheet.nrows):
+                    parts.append("\t".join(
+                        str(sheet.cell_value(row_idx, col_idx))
+                        for col_idx in range(sheet.ncols)
+                    ))
+            text = "\n".join(parts)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from OpenDocument Text (.odt)
+        if mime == "application/vnd.oasis.opendocument.text" or target.lower().endswith(".odt"):
+            import zipfile
+            from lxml import etree
+
+            def _parse_odt(file_path):
+                with zipfile.ZipFile(file_path) as zf:
+                    with zf.open("content.xml") as f:
+                        tree = etree.parse(f)
+                ns = {"text": "urn:oasis:names:tc:opendocument:xmlns:text:1.0"}
+                return "\n".join(
+                    "".join(p.itertext())
+                    for p in tree.iter(f"{{{ns['text']}}}p")
+                )
+
+            text = await asyncio.to_thread(_parse_odt, target)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from OpenDocument Spreadsheet (.ods)
+        if mime == "application/vnd.oasis.opendocument.spreadsheet" or target.lower().endswith(".ods"):
+            import zipfile
+            from lxml import etree
+
+            def _parse_ods(file_path):
+                with zipfile.ZipFile(file_path) as zf:
+                    with zf.open("content.xml") as f:
+                        tree = etree.parse(f)
+                ns_table = "urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+                ns_text = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+                parts = []
+                for table in tree.iter(f"{{{ns_table}}}table"):
+                    name = table.get(f"{{{ns_table}}}name", "Sheet")
+                    parts.append(f"--- {name} ---")
+                    for row in table.iter(f"{{{ns_table}}}table-row"):
+                        cells = []
+                        for cell in row.iter(f"{{{ns_table}}}table-cell"):
+                            cell_text = " ".join(
+                                "".join(p.itertext())
+                                for p in cell.iter(f"{{{ns_text}}}p")
+                            )
+                            cells.append(cell_text)
+                        parts.append("\t".join(cells))
+                return "\n".join(parts)
+
+            text = await asyncio.to_thread(_parse_ods, target)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from OpenDocument Presentation (.odp)
+        if mime == "application/vnd.oasis.opendocument.presentation" or target.lower().endswith(".odp"):
+            import zipfile
+            from lxml import etree
+
+            def _parse_odp(file_path):
+                with zipfile.ZipFile(file_path) as zf:
+                    with zf.open("content.xml") as f:
+                        tree = etree.parse(f)
+                ns_draw = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+                ns_text = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+                parts = []
+                for i, page in enumerate(tree.iter(f"{{{ns_draw}}}page"), 1):
+                    parts.append(f"--- Slide {i} ---")
+                    for p in page.iter(f"{{{ns_text}}}p"):
+                        text = "".join(p.itertext()).strip()
+                        if text:
+                            parts.append(text)
+                return "\n".join(parts)
+
+            text = await asyncio.to_thread(_parse_odp, target)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from EPUB e-books (.epub)
+        if mime == "application/epub+zip" or target.lower().endswith(".epub"):
+            import zipfile
+            from lxml import etree
+
+            def _parse_epub(file_path):
+                parts = []
+                with zipfile.ZipFile(file_path) as zf:
+                    # Parse the container to find the root file
+                    with zf.open("META-INF/container.xml") as cf:
+                        container = etree.parse(cf)
+                    ns_container = "urn:oasis:names:tc:opendocument:xmlns:container"
+                    rootfile = container.find(
+                        f".//{{{ns_container}}}rootfile"
+                    )
+                    if rootfile is None:
+                        # Fallback: try common namespace
+                        rootfile = container.xpath(
+                            "//*[local-name()='rootfile']"
+                        )
+                        rootfile = rootfile[0] if rootfile else None
+
+                    if rootfile is not None:
+                        opf_path = rootfile.get("full-path", "")
+                        opf_dir = opf_path.rsplit("/", 1)[0] + "/" if "/" in opf_path else ""
+                        with zf.open(opf_path) as opf_file:
+                            opf = etree.parse(opf_file)
+                        # Get spine item IDs in reading order
+                        spine_ids = [
+                            item.get("idref")
+                            for item in opf.xpath("//*[local-name()='itemref']")
+                        ]
+                        # Build manifest map: id -> href
+                        manifest = {
+                            item.get("id"): item.get("href")
+                            for item in opf.xpath("//*[local-name()='item']")
+                        }
+                        for idref in spine_ids:
+                            href = manifest.get(idref, "")
+                            item_path = opf_dir + href if not href.startswith("/") else href.lstrip("/")
+                            try:
+                                with zf.open(item_path) as html_file:
+                                    html_tree = etree.parse(html_file, etree.HTMLParser())
+                                    body = html_tree.find(".//body")
+                                    if body is not None:
+                                        text = "".join(body.itertext())
+                                        parts.append(text.strip())
+                            except (KeyError, etree.XMLSyntaxError):
+                                continue
+                    else:
+                        # Fallback: read all HTML/XHTML files
+                        for name in zf.namelist():
+                            if name.endswith((".html", ".xhtml", ".htm")):
+                                try:
+                                    with zf.open(name) as html_file:
+                                        html_tree = etree.parse(html_file, etree.HTMLParser())
+                                        body = html_tree.find(".//body")
+                                        if body is not None:
+                                            text = "".join(body.itertext())
+                                            parts.append(text.strip())
+                                except etree.XMLSyntaxError:
+                                    continue
+                return "\n\n".join(parts)
+
+            text = await asyncio.to_thread(_parse_epub, target)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
+        # Extract text from email messages (.eml)
+        if mime == "message/rfc822" or target.lower().endswith(".eml"):
+            import email
+            from email import policy
+
+            def _parse_eml(file_path):
+                with open(file_path, "rb") as f:
+                    msg = email.message_from_binary_file(f, policy=policy.default)
+                parts = []
+                # Headers
+                for header in ("From", "To", "Cc", "Date", "Subject"):
+                    val = msg.get(header)
+                    if val:
+                        parts.append(f"{header}: {val}")
+                parts.append("")  # blank line after headers
+                # Body
+                body = msg.get_body(preferencelist=("plain", "html"))
+                if body:
+                    content = body.get_content()
+                    if body.get_content_type() == "text/html":
+                        # Strip HTML tags for readability
+                        from lxml import etree
+                        tree = etree.HTML(content)
+                        content = "".join(tree.itertext()) if tree is not None else content
+                    parts.append(content)
+                return "\n".join(parts)
+
+            text = await asyncio.to_thread(_parse_eml, target)
+            lines = text.splitlines(keepends=True)
+            start = (start_line or 1) - 1
+            end = end_line or len(lines)
+            return {
+                "path": target,
+                "total_lines": len(lines),
+                "content": "".join(lines[start:end]),
+            }
+
         # Return raw binary for allowed mime type prefixes (e.g. image/*)
         if any(mime.startswith(prefix) for prefix in BINARY_FILE_MIME_PREFIXES):
             return Response(content=raw, media_type=mime)
