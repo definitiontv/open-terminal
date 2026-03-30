@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from open_terminal.env import API_KEY, BINARY_FILE_MIME_PREFIXES, CORS_ALLOWED_ORIGINS, ENABLE_NOTEBOOKS, ENABLE_SYSTEM_PROMPT, ENABLE_TERMINAL, EXECUTE_DESCRIPTION, EXECUTE_TIMEOUT, LOG_DIR, MAX_TERMINAL_SESSIONS, MULTI_USER, OPEN_TERMINAL_INFO, PROCESS_LOG_RETENTION, SYSTEM_PROMPT, TERMINAL_TERM
+from open_terminal.env import API_KEY, BINARY_FILE_MIME_PREFIXES, CORS_ALLOWED_ORIGINS, ENABLE_NOTEBOOKS, ENABLE_SYSTEM_PROMPT, ENABLE_TERMINAL, EXECUTE_DESCRIPTION, EXECUTE_TIMEOUT, LOG_DIR, MAX_TERMINAL_SESSIONS, MULTI_USER, OPEN_TERMINAL_INFO, PROCESS_LOG_RETENTION, SESSION_CWD_TTL, SYSTEM_PROMPT, TERMINAL_TERM
 from open_terminal.utils.runner import PipeRunner, ProcessRunner, create_runner
 from open_terminal.utils.fs import UserFS
 
@@ -269,6 +269,40 @@ _processes: dict[str, BackgroundProcess] = {}
 _EXPIRY_SECONDS = 300  # auto-clean finished processes after 5 min
 
 
+# ---------------------------------------------------------------------------
+# Per-session working directory tracking
+# ---------------------------------------------------------------------------
+# Maps session_id → (absolute_cwd_path, last_accessed_timestamp).
+# Replaces the old os.chdir() approach which was process-global and unsafe
+# with concurrent sessions.
+_session_cwds: dict[str, tuple[str, float]] = {}
+
+
+
+def _expire_session_cwds():
+    """Remove session cwd entries that haven't been accessed within the TTL."""
+    now = time.time()
+    expired = [sid for sid, (_, ts) in _session_cwds.items() if now - ts > SESSION_CWD_TTL]
+    for sid in expired:
+        del _session_cwds[sid]
+
+
+def _get_session_cwd(session_id: str | None, fs: "UserFS") -> str:
+    """Return the tracked cwd for *session_id*, or ``fs.home`` as default."""
+    _expire_session_cwds()
+    if session_id and session_id in _session_cwds:
+        cwd, _ = _session_cwds[session_id]
+        _session_cwds[session_id] = (cwd, time.time())  # refresh TTL
+        return cwd
+    return fs.home
+
+
+def _set_session_cwd(session_id: str | None, path: str):
+    """Store a session's cwd.  No-op if *session_id* is ``None``."""
+    if session_id:
+        _session_cwds[session_id] = (path, time.time())
+
+
 from open_terminal.utils.log import log_process, read_log
 
 
@@ -378,8 +412,12 @@ if OPEN_TERMINAL_INFO:
     include_in_schema=False,
     dependencies=[Depends(verify_api_key)],
 )
-async def get_cwd(fs: UserFS = Depends(get_filesystem)):
-    return {"cwd": fs.home}
+async def get_cwd(
+    http_request: Request,
+    fs: UserFS = Depends(get_filesystem),
+):
+    session_id = http_request.headers.get("x-session-id")
+    return {"cwd": _get_session_cwd(session_id, fs)}
 
 
 @app.post(
@@ -387,17 +425,16 @@ async def get_cwd(fs: UserFS = Depends(get_filesystem)):
     include_in_schema=False,
     dependencies=[Depends(verify_api_key)],
 )
-async def set_cwd(request: MkdirRequest, fs: UserFS = Depends(get_filesystem)):
+async def set_cwd(
+    http_request: Request,
+    request: MkdirRequest,
+    fs: UserFS = Depends(get_filesystem),
+):
+    session_id = http_request.headers.get("x-session-id")
     target = fs.resolve_path(request.path)
-    if fs.username:
-        # In multi-user mode, cwd is per-user; don't touch the global server cwd.
-        return {"cwd": target}
-    if not await fs.isdir(target):
+    if not fs.username and not await fs.isdir(target):
         raise HTTPException(status_code=404, detail="Directory not found")
-    try:
-        os.chdir(target)
-    except OSError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    _set_session_cwd(session_id, target)
     return {"cwd": target}
 
 
@@ -1055,7 +1092,8 @@ async def execute(
     ),
 ):
     fs = get_filesystem(http_request)
-    cwd = fs.resolve_path(request.cwd) if request.cwd else (fs.home if fs.username else None)
+    session_id = http_request.headers.get("x-session-id")
+    cwd = fs.resolve_path(request.cwd) if request.cwd else _get_session_cwd(session_id, fs)
 
     subprocess_env = {**os.environ, **request.env} if request.env else None
     runner = await create_runner(
@@ -1437,16 +1475,21 @@ if ENABLE_TERMINAL:
                 fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
 
                 fs = get_filesystem(request)
+
+                # Use per-session cwd if available, else fall back to home
+                session_id = request.headers.get("x-session-id")
+                session_cwd = _get_session_cwd(session_id, fs) if session_id else None
+
                 if fs.username:
                     shell_cmd = [
                         "script", "-qc",
                         f"sudo -i -u {fs.username}",
                         "/dev/null",
                     ]
-                    cwd = fs.home
+                    cwd = session_cwd or fs.home
                 else:
                     shell_cmd = [os.environ.get("SHELL", "/bin/sh")]
-                    cwd = os.getcwd()
+                    cwd = session_cwd or os.getcwd()
 
                 spawn_env = os.environ.copy()
                 spawn_env.setdefault("TERM", TERMINAL_TERM)

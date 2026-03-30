@@ -161,4 +161,13 @@ OPEN_TERMINAL_INFO = os.environ.get(
     config.get("info", ""),
 )
 
+# How long (in seconds) to keep per-session cwd entries in memory.
+# Sliding window — refreshed on every access.
+SESSION_CWD_TTL: float = float(
+    os.environ.get(
+        "OPEN_TERMINAL_SESSION_CWD_TTL",
+        config.get("session_cwd_ttl", 604_800),  # 7 days
+    )
+)
+
 

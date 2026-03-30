@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.31] - 2026-03-30
+
+### Changed
+
+- 🗂️ **Per-session working directory** — replaced the process-global `os.chdir()` with an in-memory, session-aware dictionary keyed by `X-Session-Id` header. Multiple concurrent chat sessions now maintain independent working directories. `GET/POST /files/cwd`, `POST /execute`, and `POST /api/terminals` all read the header to resolve the correct cwd. Sessions without a header fall back to `fs.home`. Entries expire after 7 days of inactivity (sliding TTL), configurable via `OPEN_TERMINAL_SESSION_CWD_TTL` (or `session_cwd_ttl` in config.toml).
+
 ## [0.11.30] - 2026-03-25
 
 ### Changed
