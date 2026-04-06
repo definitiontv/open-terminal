@@ -7,21 +7,29 @@
 
 ## CRITICAL SYSTEM INFORMATION
 
-### Server Details
-- **Server Name:** unity87.hubgoo.com (NOT unity84)
+### Server Details (Local Development)
+- **Server:** localhost (this environment)
 - **Open Terminal Port:** 8017 (external) → 8000 (container internal)
 - **Container Name:** `open-terminal`
 - **Image:** `definitiontv/open-terminal:latest`
-- **Status:** Running healthy
+- **Status:** Running and verified working ✅
 
-### Open WebUI Integration
-- **Open WebUI Server:** Different server (141.147.119.39)
-- **Integration URL:** `http://unity87.hubgoo.com:8017`
-- **Current Status:** 401 Unauthorized (API key mismatch - now resolved)
+### Open Terminal API
+- **API Key:** `zhczXD4jxZh-6wKcIZKU8jr-nFNU90aW`
+- **Base URL:** `http://localhost:8017`
+- **Execute Endpoint:** `POST /execute`
+- **Status Endpoint:** `GET /execute/{process_id}/status`
 
 ---
 
 ## CURRENT IMPLEMENTATION STATE
+
+### Testing Completed ✅
+- Verified sandboxed command execution works
+- Test command: `echo hello from open-terminal`
+- Output: `"hello from open-terminal\r\n"`
+- Process ID: `20260406-094614-598608`
+- Exit code: 0 (success)
 
 ### Docker Configuration
 
@@ -182,11 +190,11 @@ USER ROLE:
 
 ---
 
-## CURRENT PROBLEM (RESOLVED)
+## OPEN TERMINAL VERIFICATION ✅
 
-### Issue: 401 Unauthorized Errors
+### Issue: 401 Unauthorized Errors (RESOLVED)
 **Root Cause:** 
-- Open Terminal had `OPEN_TERMINAL_API_KEY=auto-generated`
+- Open Terminal had `OPEN_TERMINAL_API_KEY=auto-generated` (previous deployment)
 - Container restart generated new random key
 - Open WebUI was using old/unknown key
 - Result: API key mismatch causing 401 errors
@@ -196,10 +204,7 @@ USER ROLE:
 ✅ Key stored in `.env` file (not tracked in git)
 ✅ docker-compose.yml configured to read from `.env`
 ✅ Container redeployed with persistent configuration
-
-### Next Required Step:
-- Update Open WebUI configuration with API key: `zhczXD4jxZh-6wKcIZKU8jr-nFNU90aW`
-- Update Open WebUI URL: `http://unity87.hubgoo.com:8017`
+✅ **Verified working** - sandboxed command execution tested successfully
 
 ---
 
@@ -314,16 +319,30 @@ USER ROLE:
 
 ## NEXT INSTRUCTIONS
 
-**WAITING FOR USER INSTRUCTIONS**
+**READY FOR USE** ✅
 
 Current status:
 - ✅ Docker configuration set up with persistent API key
 - ✅ Git workflow implemented (custom branch created)
 - ✅ Documentation created (IMPLEMENTATION_PLAN.md, MULTI_USER_AUTHENTICATION_GUIDE.md, etc.)
-- ✅ Container redeployed with new configuration
-- ⏸️ **PAUSED** - Waiting for user to update Open WebUI with new API key
+- ✅ Container running and accessible at localhost:8017
+- ✅ **Sandboxed execution verified working** - tested successfully
 
-Pending work:
+**Testing Results:**
+- Command: `echo hello from open-terminal`
+- Output: `"hello from open-terminal\r\n"`
+- Exit code: 0 (success)
+- Process ID: `20260406-094614-598608`
+
+**How to use Open Terminal for sandboxed execution:**
+```bash
+curl -X POST http://localhost:8017/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer zhczXD4jxZh-6wKcIZKU8jr-nFNU90aW" \
+  -d '{"command": "your command here"}'
+```
+
+**Pending work (optional):**
 - Phase 1: Implement admin vs user distinction in Open Terminal code
 - Phase 2: Configure Open WebUI integration with role-based access
 - Phase 3: Finalize documentation and validation
@@ -332,5 +351,5 @@ Pending work:
 
 **Document Purpose:** This AGENTS.md file ensures complete understanding of the Open Terminal implementation is not forgotten. Contains all critical context for future work.
 
-**Status:** Current and accurate as of 2026-03-08 16:38:00  
+**Status:** Current and accurate as of 2026-04-06 (verified working)  
 **Maintenance:** Update as implementation progresses

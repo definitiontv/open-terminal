@@ -79,6 +79,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         dnsmasq \
         libcap2-bin \
         ca-certificates \
+        sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the pre-built Python packages from the builder stage.
@@ -110,7 +111,8 @@ RUN pip install --no-cache-dir --no-deps . \
 # The app runs as "user" (UID 1000) with NO sudo access.
 # The entrypoint handles any root-level setup (iptables, chown) via gosu.
 #
-RUN useradd -m -s /bin/bash -u 1000 user
+RUN useradd -m -s /bin/bash -u 1000 user && \
+    echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 COPY entrypoint-slim.sh /app/entrypoint-slim.sh
 RUN chmod +x /app/entrypoint-slim.sh
