@@ -201,7 +201,7 @@ rebase_custom_branch() {
     fi
     
     # Rebase main
-    print_info "Rebasing main onto $CUSTOM_BRANCH..."
+    print_info "Rebasing $CUSTOM_BRANCH onto main..."
     if ! git_cmd rebase main; then
         print_error "Rebase conflict detected!"
         print_info "Resolve conflicts and run:"
