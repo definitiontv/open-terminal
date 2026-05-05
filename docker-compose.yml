@@ -11,3 +11,5 @@ services:
       - "8017:8000"
     env_file:
       - .env
+    environment:
+      - OPEN_TERMINAL_MULTI_USER=true
